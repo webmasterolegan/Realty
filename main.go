@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
+	//stringQuery "github.com/PuerkitoBio/goquery"
 	"github.com/opesun/goquery"
 	"regexp"
 	//"sort"
 	"strconv"
 	//"io/ioutil"
-	//"os"
 	"time"
 	//"io"
 	"os"
@@ -17,8 +17,6 @@ import (
 	//"labix.org/v2/mgo/bson"
 	//"log"
 	//"sync"
-	//"os/signal"
-	//А вот эти - для высчитывания хешей:
 	"crypto/md5"
 	"encoding/hex"
 	//"labix.org/v2/mgo"
@@ -30,6 +28,7 @@ import (
 )
 
 var (
+	// Презент
 	Prezent_HASH      string = "cache/present-dv/hash"
 	Prezent_HASH_CARD string = "cache/present-dv/hash_card"
 	Prezent_LIST_UID  string = "cache/present-dv/uid"
@@ -45,12 +44,10 @@ var (
 	Prezent_realty_URL      string = "http://present-dv.ru/present/notice/index/rubric/nedvijimost-prodam/pageSize/200/"
 	Prezent_CARD_URL        string = "http://present-dv.ru/present/notice/view/"
 
-	Start_Page   int = 1
-	channelUIDs      = make(chan string)
-	channelCards     = make(chan string)
-	//UIDs         map[string]bool = make(map[string]bool) //map в котором в качестве ключей будем использовать строки, а для значений - булев тип.
+	Start_Page int = 1
 
-	EXPORT_DIR string = "export/"
+	channelUIDs  = make(chan string)
+	channelCards = make(chan string)
 
 	///// Podkova27.ru
 	Podkova_HASH      string = "cache/podkova27/hash"
@@ -103,13 +100,9 @@ func PresentScraper(URL string) {
 
 		if !used[hash_string] {
 			fmt.Println("Изменилась стартовая страница, затрачено:", time.Since(start).Seconds())
-			// все в порядке - заносим хеш в хранилище, и записываем его и цитату в файлы
-			hash_list, _ := os.OpenFile(Prezent_HASH, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
-			hash_list.WriteString(hash_string + "\n")
-			hash_list.Close()
 
 			// ДОРАБОТАТЬ !!! если всё на одной странице
-			// Список страниц со списками обьявлений
+			// Страницы со списками обьявлений
 			List := Pages.Find(".pager a").Attrs("href")
 			n := len(List) - 2
 			re := regexp.MustCompile("[0-9]+$")
@@ -149,11 +142,11 @@ func PresentScraper(URL string) {
 					if !card_used[card_hash] {
 						// запись хеша карточки
 						card_hash_file.WriteString(card_hash + "\n")
-
+						// сохранение карточки
 						card_file.WriteString(Card + "\n")
 
 						// Экспорт в JSON
-						PrezentExportCard(Card)
+						//PrezentExportCard(Card)
 
 					} else {
 						count++
@@ -165,6 +158,10 @@ func PresentScraper(URL string) {
 				fmt.Println("Затрачено:", time.Since(start).Seconds(), "Повторов:", count)
 
 			}
+			// все в порядке - заносим хеш в хранилище, и записываем его и цитату в файлы
+			hash_list, _ := os.OpenFile(Prezent_HASH, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+			hash_list.WriteString(hash_string + "\n")
+			hash_list.Close()
 
 		} else {
 			fmt.Println("Стартовая страница не изменилась, затрачено:", time.Since(start).Seconds())
@@ -266,39 +263,6 @@ func PrezentGetCard(uid string, channelCards chan<- string) {
 	}
 }
 
-func PrezentExportCard(Card string) {
-
-	//fmt.Println(Card)
-
-	/*
-		Card, err := goquery.ParseString(Card)
-		check(err)
-
-		if Price := strings.TrimSpace(Card.Find(".price span").Html()); Price != "" {
-			Price = strings.Replace(Price, "\n", "", -1)
-			fmt.Println("Цена:", Price)
-			//channelCards <- Card // отправка в канал
-		}
-	*/
-}
-
-func cardReader() {
-	//cradList := make(map[string]bool)
-
-	file, _ := os.Open(Prezent_LIST_CARD)
-	defer file.Close()
-	f := bufio.NewReader(file)
-	for {
-		read_line, _ := f.ReadString('\n')
-		if read_line != "" {
-			read_line = strings.Replace(read_line, "\n", "", 1)
-			PrezentExportCard(read_line)
-		} else {
-			return
-		}
-	}
-}
-
 //////// Podkova27.ru
 func PodkovaScraper() {
 	//start := time.Now()
@@ -315,14 +279,20 @@ func PodkovaScraper() {
 }
 
 func main() {
-	//cardReader()
-	PresentScraper(Prezent_cars_URL)
-	PresentScraper(Prezent_autoservice_URL)
-	PresentScraper(Prezent_materials_URL)
-	PresentScraper(Prezent_tour_URL)
-	PresentScraper(Prezent_job_URL)
-	PresentScraper(Prezent_flea_market_URL)
-	PresentScraper(Prezent_realty_URL)
+	//
 	//PodkovaScraper()
-	//UIDs[UID]
+
+	PresentScraper(Prezent_cars_URL)
+	//
+	PresentScraper(Prezent_autoservice_URL)
+	//
+	PresentScraper(Prezent_materials_URL)
+	//
+	PresentScraper(Prezent_tour_URL)
+	//
+	PresentScraper(Prezent_job_URL)
+	//
+	PresentScraper(Prezent_flea_market_URL)
+	//
+	PresentScraper(Prezent_realty_URL)
 }
