@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	//stringQuery "github.com/PuerkitoBio/goquery"
-	"github.com/opesun/goquery"
+	"github.com/PuerkitoBio/goquery"
 	"regexp"
 	//"sort"
 	"strconv"
@@ -32,28 +32,33 @@ var (
 	Prezent_HASH      string = "cache/present-dv/hash"
 	Prezent_HASH_CARD string = "cache/present-dv/hash_card"
 	Prezent_LIST_UID  string = "cache/present-dv/uid"
-	Prezent_LIST_CARD string = "cache/present-dv/card"
 	LimitUID          int    = 1000
 	// URLs
-	Prezent_materials_URL   string = "http://present-dv.ru/present/notice/index/rubric/stroitelnye-i-otdelochnye-materialy/pageSize/200/"
-	Prezent_cars_URL        string = "http://present-dv.ru/present/notice/index/rubric/avtomobili-spetstehnika-zapchasti-prodaja/pageSize/200/"
-	Prezent_autoservice_URL string = "http://present-dv.ru/present/notice/index/rubric/avtoservis/pageSize/200/"
-	Prezent_tour_URL        string = "http://present-dv.ru/present/notice/index/rubric/tury-puteshestviya-otdyh/page/"
-	Prezent_job_URL         string = "http://present-dv.ru/present/notice/index/rubric/vakansii/pageSize/200/"
-	Prezent_flea_market_URL string = "http://present-dv.ru/present/notice/index/rubric/torgovaya-ploshchadka-prodam/pageSize/200/"
-	Prezent_realty_URL      string = "http://present-dv.ru/present/notice/index/rubric/nedvijimost-prodam/pageSize/200/"
+	Prezent_materials_URL   string = "http://present-dv.ru/present/rubric/stroitelnye-i-otdelochnye-materialy?pageSize=200"
+	Prezent_cars_URL        string = "http://present-dv.ru/present/rubric/avtomobili-spetstehnika-zapchasti-prodaja?pageSize=200"
+	Prezent_autoservice_URL string = "http://present-dv.ru/present/rubric/avtoservis?pageSize=200"
+	Prezent_tour_URL        string = "http://present-dv.ru/present/rubric/tury-puteshestviya-otdyh?page"
+	Prezent_job_URL         string = "http://present-dv.ru/present/rubric/vakansii?pageSize=200"
+	Prezent_flea_market_URL string = "http://present-dv.ru/present/rubric/torgovaya-ploshchadka-prodam?pageSize=200"
+	Prezent_realty_URL      string = "http://present-dv.ru/present/rubric/nedvijimost-prodaja?pageSize=200"
 	Prezent_CARD_URL        string = "http://present-dv.ru/present/notice/view/"
 
-	Start_Page int = 1
+	Prezent_realty_CARD string = "cache/present-dv/realty_cards"
+	Prezent_cars_CARD string = "cache/present-dv/cars_cards"
+	Prezent_autoservice_CARD string = "cache/present-dv/autoservices_cards"
+	Prezent_tour_CARD string = "cache/present-dv/tour_cards"
+	Prezent_job_CARD string = "cache/present-dv/job_cards"
+	Prezent_flea_CARD string = "cache/present-dv/flea_cards"
+	Prezent_materials_CARD string = "cache/present-dv/materials_cards"
 
 	channelUIDs  = make(chan string)
 	channelCards = make(chan string)
 
 	///// Podkova27.ru
-	Podkova_HASH      string = "cache/podkova27/hash"
-	Podkova_HASH_CARD string = "cache/podkova27/hash_card"
-	Podkova_LIST_UID  string = "cache/podkova27/uid"
-	Podkova_LIST_CARD string = "cache/podkova27/card"
+	//Podkova_HASH      string = "cache/podkova27/hash"
+	//Podkova_HASH_CARD string = "cache/podkova27/hash_card"
+	//Podkova_LIST_UID  string = "cache/podkova27/uid"
+	//Podkova_LIST_CARD string = "cache/podkova27/card"
 )
 
 func check(e error) {
@@ -86,27 +91,27 @@ func HashUsed(hash_file string) map[string]bool {
 }
 
 // Скрапер презента
-func PresentScraper(URL string) {
+func PresentScraper(URL string, List_File string) {
 	start := time.Now()
 	fmt.Println("Анализ начат:", URL)
 
-	Pages, err := goquery.ParseUrl(URL)
+	Pages, err := goquery.NewDocument(URL)
 	check(err)
 
-	if section := strings.TrimSpace(Pages.Find(".notices").Text()); section != "" {
+	if section := strings.TrimSpace(Pages.Find(".col-md-9").Text()); section != "" {
 
 		used := HashUsed(Prezent_HASH)
 		hash_string := GetMD5Hash(section)
 
 		if !used[hash_string] {
-			fmt.Println("Изменилась стартовая страница, затрачено:", time.Since(start).Seconds())
+			fmt.Println("Стартовая страница изменилась, затрачено:", time.Since(start).Seconds())
 
 			// ДОРАБОТАТЬ !!! если всё на одной странице
 			// Страницы со списками обьявлений
-			List := Pages.Find(".pager a").Attrs("href")
-			n := len(List) - 2
+			List := Pages.Find(".page a").Last().Text()
+
 			re := regexp.MustCompile("[0-9]+$")
-			num, _ := strconv.Atoi(re.FindString(List[n]))
+			num, _ := strconv.Atoi(re.FindString(List))
 
 			UIDs := UidCollector(num+1, URL)
 
@@ -128,10 +133,11 @@ func PresentScraper(URL string) {
 				defer card_hash_file.Close()
 
 				// html объявлений
-				card_file, _ := os.OpenFile(Prezent_LIST_CARD, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+				card_file, _ := os.OpenFile(List_File, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 				defer card_file.Close()
 
 				count := 0
+				good := 0
 				for i := 0; i < len(UIDs); i++ {
 					// Чтение потока объявлений
 					Card := <-channelCards
@@ -148,11 +154,13 @@ func PresentScraper(URL string) {
 						// Экспорт в JSON
 						//PrezentExportCard(Card)
 
+						good++
+
+						fmt.Println(time.Since(start).Seconds(), "Получено:", good)
 					} else {
 						count++
+						fmt.Println(time.Since(start).Seconds(), "Повтор:")
 					}
-
-					fmt.Println(time.Since(start).Seconds(), "Получено:", i+1)
 				}
 
 				fmt.Println("Затрачено:", time.Since(start).Seconds(), "Повторов:", count)
@@ -164,10 +172,10 @@ func PresentScraper(URL string) {
 			hash_list.Close()
 
 		} else {
-			fmt.Println("Стартовая страница не изменилась, затрачено:", time.Since(start).Seconds())
+			fmt.Println("Нет нового контента, затрачено:", time.Since(start).Seconds())
 		}
 	} else {
-		fmt.Println("Не прочитаны данные, поймана заглушка")
+		fmt.Println("Не прочитаны данные, возможно поймана заглушка или произошли значительные изменния в структуре сайта")
 	}
 }
 
@@ -181,23 +189,24 @@ func UidFinder(url string, stop chan bool, channelUIDs chan<- string) {
 		// Ветка default нужна, чтобы при отсутствии сообщений в chan работа функции продолжилась вместо блокировки на ожидании сообщения
 	}
 
-	Page, err := goquery.ParseUrl(url)
+	Page, err := goquery.NewDocument(url)
 	check(err)
 
-	// Сбор всех ссылок
-	Links := Page.Find(".actions a").Attrs("href")
 	// Шаблон для поиска ссылок на объявления
 	re := regexp.MustCompile("view/([0-9]+)$")
-
 	UIDsRow := ""
-	// Сбор идентификаторов
-	for _, link := range Links {
-		if re.FindString(link) != "" {
-			if uid := re.FindStringSubmatch(link)[1]; re.FindString(link) != "" {
-				UIDsRow += uid + ","
+
+	// Обработка ссылок
+	Page.Find(".image-flex__wrapper").Each(
+		func(i int, link *goquery.Selection) {
+			url, _ := link.Attr("href")
+			if re.FindString(url) != "" {
+				if uid := re.FindStringSubmatch(url)[1]; re.FindString(url) != "" {
+					UIDsRow += uid + ","
+				}
 			}
-		}
-	}
+		})
+
 	channelUIDs <- UIDsRow // отправка в канал
 }
 
@@ -213,7 +222,7 @@ func UidCollector(pages int, URL string) map[string]bool {
 
 	go func() {
 		for i := 1; i < pages; i++ {
-			url := URL + "page/" + strconv.Itoa(i)
+			url := URL + "&page=" + strconv.Itoa(i)
 
 			go UidFinder(url, stop, channelUIDs) ///
 		}
@@ -235,7 +244,7 @@ func UidCollector(pages int, URL string) map[string]bool {
 				if !used[UID] {
 					UIDs[UID] = true
 					uid_list.WriteString(UID + "\n")
-					fmt.Println("[UID]:", UID, len(UIDs))
+					fmt.Println("[NewUID]:", UID, len(UIDs))
 				} else {
 					count++
 					fmt.Println("[isset]:", count)
@@ -253,46 +262,29 @@ func UidCollector(pages int, URL string) map[string]bool {
 }
 
 func PrezentGetCard(uid string, channelCards chan<- string) {
-	Page, err := goquery.ParseUrl(Prezent_CARD_URL + uid)
+	Page, err := goquery.NewDocument(Prezent_CARD_URL + uid)
 	check(err)
 	// Список страниц со списками обьявлений
-	if Card := strings.TrimSpace(Page.Find(".notice-card").Html()); Card != "" {
+	if Card, _ := Page.Find("main").Html(); Card != "" {
 		Card = strings.Replace(Card, "\n", "", -1)
 
 		channelCards <- Card // отправка в канал
 	}
 }
 
-//////// Podkova27.ru
-func PodkovaScraper() {
-	//start := time.Now()
-	fmt.Println("Анализ сайта агентства подкова начат")
-
-	Pages, err := goquery.ParseUrl(Prezent_flea_market_URL)
-	check(err)
-
-	if section := strings.TrimSpace(Pages.Find(".notices").Text()); section != "" {
-
-	} else {
-		fmt.Println("Не прочитаны данные, поймана заглушка")
-	}
-}
-
 func main() {
-	//
-	//PodkovaScraper()
 
-	PresentScraper(Prezent_cars_URL)
+	PresentScraper(Prezent_cars_URL, Prezent_cars_CARD)
 	//
-	PresentScraper(Prezent_autoservice_URL)
+	PresentScraper(Prezent_autoservice_URL, Prezent_autoservice_CARD)
 	//
-	PresentScraper(Prezent_materials_URL)
+	PresentScraper(Prezent_materials_URL, Prezent_materials_CARD)
 	//
-	PresentScraper(Prezent_tour_URL)
+	PresentScraper(Prezent_tour_URL, Prezent_tour_CARD)
 	//
-	PresentScraper(Prezent_job_URL)
+	PresentScraper(Prezent_job_URL, Prezent_job_CARD)
 	//
-	PresentScraper(Prezent_flea_market_URL)
+	PresentScraper(Prezent_flea_market_URL, Prezent_flea_CARD)
 	//
-	PresentScraper(Prezent_realty_URL)
+	PresentScraper(Prezent_realty_URL, Prezent_realty_CARD)
 }

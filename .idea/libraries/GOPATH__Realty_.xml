@@ -1,0 +1,21 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;Realty&gt;">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/../../src/firstProject" />
+      <root url="file://$PROJECT_DIR$/../../src/crawler" />
+      <root url="file://$PROJECT_DIR$/../../src/gopkg.in" />
+      <root url="file://$PROJECT_DIR$/../../src/github.com" />
+      <root url="file://$PROJECT_DIR$/../../src/golang.org" />
+    </CLASSES>
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/../../src/firstProject" />
+      <root url="file://$PROJECT_DIR$/../../src/crawler" />
+      <root url="file://$PROJECT_DIR$/../../src/gopkg.in" />
+      <root url="file://$PROJECT_DIR$/../../src/github.com" />
+      <root url="file://$PROJECT_DIR$/../../src/golang.org" />
+    </SOURCES>
+    <excluded>
+      <root url="file://$PROJECT_DIR$" />
+    </excluded>
+  </library>
+</component>
