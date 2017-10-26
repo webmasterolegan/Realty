@@ -25,6 +25,13 @@ import (
 	//"sync"
 	"bufio"
 	//"encoding/json"
+	"compress/gzip"
+	"archive/tar"
+	"io"
+	"net/http"
+	"io/ioutil"
+	"bytes"
+	"mime/multipart"
 )
 
 var (
@@ -32,8 +39,12 @@ var (
 	Prezent_HASH      string = "cache/present-dv/hash"
 	Prezent_HASH_CARD string = "cache/present-dv/hash_card"
 	Prezent_LIST_UID  string = "cache/present-dv/uid"
-	LimitUID          int    = 1000
+	Prezent_CARDS 	  string = "tmp/presentCards"
+	File_to_SEND	  string = "tmp/PresentCARDS.tar.gz"
+	LimitUID          int    = 300
 	// URLs
+	Server_URL 		        string = "http://dashboard.app/api/cards"
+	// Target URLs
 	Prezent_materials_URL   string = "http://present-dv.ru/present/rubric/stroitelnye-i-otdelochnye-materialy?pageSize=200"
 	Prezent_cars_URL        string = "http://present-dv.ru/present/rubric/avtomobili-spetstehnika-zapchasti-prodaja?pageSize=200"
 	Prezent_autoservice_URL string = "http://present-dv.ru/present/rubric/avtoservis?pageSize=200"
@@ -41,15 +52,8 @@ var (
 	Prezent_job_URL         string = "http://present-dv.ru/present/rubric/vakansii?pageSize=200"
 	Prezent_flea_market_URL string = "http://present-dv.ru/present/rubric/torgovaya-ploshchadka-prodam?pageSize=200"
 	Prezent_realty_URL      string = "http://present-dv.ru/present/rubric/nedvijimost-prodaja?pageSize=200"
+	// Card URL
 	Prezent_CARD_URL        string = "http://present-dv.ru/present/notice/view/"
-
-	Prezent_realty_CARD string = "cache/present-dv/realty_cards"
-	Prezent_cars_CARD string = "cache/present-dv/cars_cards"
-	Prezent_autoservice_CARD string = "cache/present-dv/autoservices_cards"
-	Prezent_tour_CARD string = "cache/present-dv/tour_cards"
-	Prezent_job_CARD string = "cache/present-dv/job_cards"
-	Prezent_flea_CARD string = "cache/present-dv/flea_cards"
-	Prezent_materials_CARD string = "cache/present-dv/materials_cards"
 
 	channelUIDs  = make(chan string)
 	channelCards = make(chan string)
@@ -64,6 +68,82 @@ var (
 func check(e error) {
 	if e != nil {
 		panic(e)
+	}
+}
+
+func addFile(tw * tar.Writer, path string) error {
+	file, err := os.Open(path)
+	check(err)
+	defer file.Close()
+
+	if stat, err := file.Stat(); err == nil {
+		// now lets create the header as needed for this file within the tarball
+		header := new(tar.Header)
+		header.Name = path
+		header.Size = stat.Size()
+		header.Mode = int64(stat.Mode())
+		header.ModTime = stat.ModTime()
+		// write the header to the tarball archive
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		// copy the file data to the tarball
+		if _, err := io.Copy(tw, file); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func postFile(filename string, targetUrl string) error {
+	bodyBuf := &bytes.Buffer{}
+	bodyWriter := multipart.NewWriter(bodyBuf)
+
+	// this step is very important
+	fileWriter, err := bodyWriter.CreateFormFile("presentCards", filename)
+	check(err)
+
+	// open file handle
+	fh, err := os.Open(filename)
+	check(err)
+
+	//iocopy
+	_, err = io.Copy(fileWriter, fh)
+	check(err)
+
+	contentType := bodyWriter.FormDataContentType()
+	bodyWriter.Close()
+
+	resp, err := http.Post(targetUrl, contentType, bodyBuf)
+	check(err)
+	defer resp.Body.Close()
+
+	resp_body, err := ioutil.ReadAll(resp.Body)
+	check(err)
+
+	fmt.Println(resp.Status)
+	fmt.Println(string(resp_body))
+
+	return nil
+}
+
+func makeData(card_file string){
+	_, err := os.Stat(card_file)
+	if err != nil {
+		file, err := os.Create(File_to_SEND)
+		check(err)
+
+		defer file.Close()
+		// set up the gzip writer
+		gw := gzip.NewWriter(file)
+		defer gw.Close()
+
+		tw := tar.NewWriter(gw)
+		defer tw.Close()
+
+		addFile(tw, Prezent_CARDS)
+	} else {
+		fmt.Println("Не найден список объявлений: ", card_file)
 	}
 }
 
@@ -91,7 +171,7 @@ func HashUsed(hash_file string) map[string]bool {
 }
 
 // Скрапер презента
-func PresentScraper(URL string, List_File string) {
+func PresentScraper(URL string) {
 	start := time.Now()
 	fmt.Println("Анализ начат:", URL)
 
@@ -133,7 +213,7 @@ func PresentScraper(URL string, List_File string) {
 				defer card_hash_file.Close()
 
 				// html объявлений
-				card_file, _ := os.OpenFile(List_File, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+				card_file, _ := os.OpenFile(Prezent_CARDS, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 				defer card_file.Close()
 
 				count := 0
@@ -274,17 +354,34 @@ func PrezentGetCard(uid string, channelCards chan<- string) {
 
 func main() {
 
-	PresentScraper(Prezent_cars_URL, Prezent_cars_CARD)
-	//
-	PresentScraper(Prezent_autoservice_URL, Prezent_autoservice_CARD)
-	//
-	PresentScraper(Prezent_materials_URL, Prezent_materials_CARD)
-	//
-	PresentScraper(Prezent_tour_URL, Prezent_tour_CARD)
-	//
-	PresentScraper(Prezent_job_URL, Prezent_job_CARD)
-	//
-	PresentScraper(Prezent_flea_market_URL, Prezent_flea_CARD)
-	//
-	PresentScraper(Prezent_realty_URL, Prezent_realty_CARD)
+	PresentScraper(Prezent_cars_URL)
+	PresentScraper(Prezent_autoservice_URL)
+	PresentScraper(Prezent_materials_URL)
+	PresentScraper(Prezent_tour_URL)
+	PresentScraper(Prezent_job_URL)
+	PresentScraper(Prezent_flea_market_URL)
+	PresentScraper(Prezent_realty_URL)
+
+	// Сжатие файла перед отправкой
+	makeData(Prezent_CARDS)
+
+	/*
+	// Удаление файла объявлений
+	Cards, err := os.Stat(Prezent_CARDS)
+	if err != nil {
+		fmt.Println(Cards)
+		os.Remove(Prezent_CARDS)
+	}
+	*/
+
+	/*
+	// Отправка сжатого файла
+	_, err := os.Stat(File_to_SEND)
+	if os.Stat(File_to_SEND) != nil {
+		postFile(File_to_SEND, Server_URL)
+		os.Remove(File_to_SEND)
+	} else {
+		fmt.Println("Не найден файл для отправки: ", File_to_SEND)
+	}
+	*/
 }
